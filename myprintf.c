@@ -9,24 +9,36 @@
 #define countof(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 inline static void
-saturating_inc(int *i)
+saturating_increment(int *i)
 {
 	if (*i < INT_MAX)
 		(*i)++;
 }
 
+/*
+ * c: character as an unsigned int
+ */
+inline static int
+xputc(int *retlen, int c, FILE *f)
+{
+	int r = fputc((unsigned char)c, f);
+	if (r == EOF)
+		return EOF;
+	saturating_increment(retlen);
+	if (*retlen == INT_MAX)
+		return EOF;
+	return 0;
+}
+
 int
 myvfprintf(FILE *f, const char *fmt, va_list ap)
 {
-	enum state {
-		STATE_NONE,
-		STATE_ESCAPE
-	} st = STATE_NONE;
+	enum state { STATE_NONE, STATE_ESCAPE } st = STATE_NONE;
 
 	int retlen = 0;
 
 	for (int i = 0; fmt[i] != '\0'; i++) {
-		char c = fmt[i];
+		unsigned char c = fmt[i];
 
 		switch (st) {
 		case STATE_NONE: {
@@ -35,23 +47,14 @@ myvfprintf(FILE *f, const char *fmt, va_list ap)
 				break;
 			}
 
-			int r = fputc((unsigned char)c, f);
-			if (r == EOF)
-				return retlen;
-			saturating_inc(&retlen);
-			if (retlen == INT_MAX)
+			if (xputc(&retlen, c, f) == EOF)
 				return retlen;
 			break;
 		}
 		case STATE_ESCAPE: {
 			if (c == '%') {
-				int r = fputc((unsigned char)c, f);
-				if (r == EOF)
+				if (xputc(&retlen, c, f) == EOF)
 					return retlen;
-				saturating_inc(&retlen);
-				if (retlen == INT_MAX)
-					return retlen;
-
 				st = STATE_NONE;
 				break;
 			} else if (c == 'd') {
@@ -70,15 +73,10 @@ myvfprintf(FILE *f, const char *fmt, va_list ap)
 					}
 				}
 
-				for (; s[i] != '\0'; i++) {
-					int r = fputc((unsigned char)s[i], f);
-					if (r == EOF)
+				for (; s[i] != '\0'; i++)
+					if (xputc(&retlen, (unsigned char)s[i],
+					        f) == EOF)
 						return retlen;
-					saturating_inc(&retlen);
-					if (retlen == INT_MAX)
-						return retlen;
-				}
-
 				st = STATE_NONE;
 				break;
 			} else if (c == 'c') {
@@ -88,15 +86,11 @@ myvfprintf(FILE *f, const char *fmt, va_list ap)
 				 * はC言語の可変長引数の仕様かもしれな
 				 * い。
 				 */
-				char c = (unsigned char)va_arg(ap, int);
+				unsigned char c =
+				    (unsigned char)va_arg(ap, int);
 
-				int r = fputc((unsigned char)c, f);
-				if (r == EOF)
+				if (xputc(&retlen, c, f) == EOF)
 					return retlen;
-				saturating_inc(&retlen);
-				if (retlen == INT_MAX)
-					return retlen;
-
 				st = STATE_NONE;
 				break;
 			}
