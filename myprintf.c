@@ -57,11 +57,8 @@ myvfprintf(FILE *f, const char *fmt, va_list ap)
 			} else if (c == 'd') {
 				int d = va_arg(ap, int);
 
-				/*
-				 * int to string
-				 * INT_MAXが21億程度であることを想定
-				 */
-				char s[11];
+				/* int to string */
+				char s[CHAR_BIT * sizeof(int)];
 				int i = countof(s);
 				s[--i] = '\0';
 				if (d == 0) {
